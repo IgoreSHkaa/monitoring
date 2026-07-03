@@ -65,6 +65,28 @@ services:
     networks:
       - zabbix-net
 
+  zabbix-agent:
+    image: zabbix/zabbix-agent:alpine-7.0-latest
+    container_name: zabbix-agent
+    restart: unless-stopped
+    environment:
+      ZBX_HOSTNAME: "Zabbix server"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_PASSIVE_ALLOW: "true"
+      ZBX_ACTIVE_ALLOW: "true"
+      ZBX_METADATA: "LinuxDocker"
+    ports:
+      - "10050:10050"
+    privileged: true
+    pid: "host"
+    volumes:
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro,rslave
+    networks:
+      - zabbix-net
+
 networks:
   zabbix-net:
     driver: bridge
