@@ -36,6 +36,8 @@ services:
       MYSQL_DATABASE: zabbix
       MYSQL_USER: zabbix
       MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_PASSWORD
+      ZBX_AUTOHOSTREG: 1
+      ZBX_AUTOREGHOSTS: 1
     secrets:
       - MYSQL_PASSWORD
     ports:
@@ -72,9 +74,11 @@ services:
     restart: unless-stopped
     environment:
       ZBX_HOSTNAME: "Zabbix server"
-      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_HOST: "zabbix-server"
+      ZBX_SERVER_ACTIVE: "zabbix-server"
       ZBX_PASSIVE_ALLOW: "true"
       ZBX_ACTIVE_ALLOW: "true"
+      ZBX_ALLOW_HOSTS: "0.0.0.0/0"
       ZBX_METADATA: "LinuxDocker"
     ports:
       - "10050:10050"
