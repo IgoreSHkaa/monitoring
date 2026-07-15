@@ -89,8 +89,9 @@ services:
       - /sys:/sys:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /:/host:ro,rslave
-      - /root/Compose/agent_pkg.sh:/usr/local/bin/agent_pkg.sh:ro
-      - /root/Compose/pkg_cache.txt:/var/lib/zabbix/pkg_cache.txt
+      - ./agent_pkg.sh:/usr/local/bin/agent_pkg.sh:ro
+      - ./pkg_cache.txt:/var/lib/zabbix/pkg_cache.txt
+      - ./zabbix_agent_conf/:/etc/zabbix/zabbix_agentd.d/:ro
     networks:
       - zabbix-net
 
