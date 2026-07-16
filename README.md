@@ -1,9 +1,9 @@
 1. Подготовка секретов  
 Создайте директорию для секретов и сгенерируйте пароли  
 
-  mkdir -p secrets  
-  echo "slozhiy parol123" > secrets/MYSQL_ROOT_PASSWORD.txt  
-  echo "slozhiy parol123" > secrets/MYSQL_PASSWORD.txt    
+mkdir -p secrets  
+echo "slozhiy parol123" > secrets/MYSQL_ROOT_PASSWORD.txt  
+echo "slozhiy parol123" > secrets/MYSQL_PASSWORD.txt    
 
 2. Запустите контейнеры в фоновом режиме:
 
@@ -17,20 +17,20 @@ docker compose up -d
 Перейдите в Administration → General → Macros и установите макрос:  
 {$ZABBIX.URL} = http://IP:8080/
 
-5. Создание типа медиа (Media Type)
-Перейдите в Administration → Media types → Create media type:
-Name: Discord
-Type: Webhook
-Parameters:
-     Name                     Value
-alert.message             {ALERT.MESSAGE}
-alert.subject             {ALERT.SUBJECT}
-discord.endpoint https://discord.com/api/webhooks/ВАШ_ТОКЕН
-event.id                   {EVENT.ID}
-event.nseverity          {EVENT.NSEVERITY}
-trigger.id                  {TRIGGER.ID}
-user_agent          ZabbixServer (zabbix.com, 7.0)
-zabbix.url                  http://IP:8080/
+5. Создание типа медиа (Media Type)  
+Перейдите в Administration → Media types → Create media type:  
+Name: Discord  
+Type: Webhook  
+Parameters:  
+     Name                     Value  
+alert.message             {ALERT.MESSAGE}  
+alert.subject             {ALERT.SUBJECT}  
+discord.endpoint https://discord.com/api/webhooks/ВАШ_ТОКЕН  
+event.id                   {EVENT.ID}  
+event.nseverity          {EVENT.NSEVERITY}  
+trigger.id                  {TRIGGER.ID}  
+user_agent          ZabbixServer (zabbix.com, 7.0)  
+zabbix.url                  http://IP:8080/  
 
 Поставить галочку возле Enable
 
