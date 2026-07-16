@@ -1,9 +1,9 @@
 1. Подготовка секретов  
 Создайте директорию для секретов и сгенерируйте пароли  
 
-mkdir -p secrets
+mkdir -p secrets  
 echo "slozhiy parol123" > secrets/MYSQL_ROOT_PASSWORD.txt  
-echo "slozhiy parol123" > secrets/MYSQL_PASSWORD.txt  
+echo "slozhiy parol123" > secrets/MYSQL_PASSWORD.txt    
 
 2. Запустите контейнеры в фоновом режиме:
 
