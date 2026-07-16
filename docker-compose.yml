@@ -92,6 +92,7 @@ services:
       - ./agent_pkg.sh:/usr/local/bin/agent_pkg.sh:ro
       - ./pkg_cache.txt:/var/lib/zabbix/pkg_cache.txt
       - ./zabbix_agent_conf/:/etc/zabbix/zabbix_agentd.d/:ro
+      - zabbix-agent-data:/var/lib/zabbix
     networks:
       - zabbix-net
 
@@ -101,6 +102,7 @@ networks:
 
 volumes:
   mysql-data:
+  zabbix-agent-data:
 
 secrets:
   MYSQL_ROOT_PASSWORD:
