@@ -13,8 +13,8 @@ docker compose up -d
 В настройках хоста Zabbix server в настройках Host прописать DNS name "zabbix-agent" connect to "DNS"
 
 4. Первоначальная настройка Zabbix
-Откройте веб-интерфейс: http://IP:8080/
-Перейдите в Administration → General → Macros и установите макрос:
+Откройте веб-интерфейс: http://IP:8080/  
+Перейдите в Administration → General → Macros и установите макрос:  
 {$ZABBIX.URL} = http://IP:8080/
 
 5. Создание типа медиа (Media Type)
