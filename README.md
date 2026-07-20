@@ -1,12 +1,12 @@
 
-# 4. Первоначальная настройка Zabbix
+# 1. Первоначальная настройка Zabbix
 Откройте веб-интерфейс: http://IP:8080/  
 
 Перейдите в Administration → General → Macros и установите макрос:  
 
 {$ZABBIX.URL} = http://IP:8080/
 
-# 5. Создание типа медиа (Media Type)  
+# 2. Создание типа медиа (Media Type)  
 Перейдите в Administration → Media types → Create media type:  
 
 Name: Discord  
@@ -25,7 +25,7 @@ zabbix.url → http://IP:8080/
 
 Поставить галочку возле Enable
 
-# 6. Настройка пользователя
+# 3. Настройка пользователя
 Перейдите в Users → Users → Admin → Media:
 
 Type: Discord
@@ -36,7 +36,7 @@ When active: 1-7,00:00-24:00
 
 Use if severity: Отметьте Warning, Average, High, Disaster.
 
-# 7. Создание Item
+# 4. Создание Item
 Перейдите Monitoring → Hosts → Zabbix server → Items
 
 Create item
@@ -46,7 +46,7 @@ Type: Zabbix agent
 Key: custom.packages.check
 Type: Text
 
-# 8. Создание триггера
+# 5. Создание триггера
 Перейдите Monitoring → Hosts → Zabbix server → Triggers
 
 Name: Packages updates detected on {HOST.NAME}
@@ -59,6 +59,6 @@ O: like
 V: UPDATED:
 Result = 1
 
-# 9. Настройка триггера
+# 6. Настройка триггера
 Перейдите в Alert → Actions → Trigges Actions
 Перейдите во вкладку Report problems to Zabbix administrators и поставьте галочку возле Enabled
