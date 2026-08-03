@@ -1,0 +1,110 @@
+services:
+  mysql-server:
+    image: mysql:8.0
+    container_name: zabbix-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_ROOT_PASSWORD
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_PASSWORD
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+      - MYSQL_PASSWORD
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+      - --default-authentication-plugin=mysql_native_password
+      - --log-bin-trust-function-creators=1
+      - --require_secure_transport=OFF
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$(cat /run/secrets/MYSQL_ROOT_PASSWORD)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zabbix-net
+
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:alpine-7.0-latest
+    container_name: zabbix-server
+    restart: unless-stopped
+    environment:
+      DB_SERVER_HOST: mysql-server
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_PASSWORD
+      ZBX_AUTOHOSTREG: 1
+      ZBX_AUTOREGHOSTS: 1
+    secrets:
+      - MYSQL_PASSWORD
+    ports:
+      - "10051:10051"
+    depends_on:
+      mysql-server:
+        condition: service_healthy
+    networks:
+      - zabbix-net
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-mysql:alpine-7.0-latest
+    container_name: zabbix-web
+    restart: unless-stopped
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      DB_SERVER_HOST: mysql-server
+      MYSQL_DATABASE: zabbix
+      MYSQL_USER: zabbix
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_PASSWORD
+      PHP_TZ: "Europe/Moscow"
+    secrets:
+      - MYSQL_PASSWORD
+    ports:
+      - "8080:8080"
+    depends_on:
+      - zabbix-server
+    networks:
+      - zabbix-net
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:alpine-7.0-latest
+    container_name: zabbix-agent
+    restart: unless-stopped
+    environment:
+      ZBX_HOSTNAME: "Zabbix server"
+      ZBX_SERVER_HOST: "zabbix-server"
+      ZBX_SERVER_ACTIVE: "zabbix-server"
+      ZBX_PASSIVE_ALLOW: "true"
+      ZBX_ACTIVE_ALLOW: "true"
+      ZBX_ALLOW_HOSTS: "0.0.0.0/0"
+      ZBX_METADATA: "LinuxDocker"
+    ports:
+      - "10050:10050"
+    privileged: true
+    pid: "host"
+    volumes:
+      - /proc:/proc:ro
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/host:ro,rslave
+      - ./agent_pkg.sh:/usr/local/bin/agent_pkg.sh:ro
+      - ./zabbix_agent_conf/:/etc/zabbix/zabbix_agentd.d/:ro
+      - zabbix-agent-data:/var/lib/zabbix
+    networks:
+      - zabbix-net
+
+networks:
+  zabbix-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  zabbix-agent-data:
+
+secrets:
+  MYSQL_ROOT_PASSWORD:
+    file: ./secrets/MYSQL_ROOT_PASSWORD.txt
+  MYSQL_PASSWORD:
+    file: ./secrets/MYSQL_PASSWORD.txt
