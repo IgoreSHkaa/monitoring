@@ -7,7 +7,7 @@
 {$ZABBIX.URL} = http://IP:8080/
 
 # 2. Создание типа медиа (Media Type)  
-Перейдите в Administration → Media types → Create media type:  
+Перейдите в Alerts → Media types → Create media type:  
 
 Name: Discord  
 
@@ -22,6 +22,29 @@ event.nseverity → {EVENT.NSEVERITY}
 trigger.id → {TRIGGER.ID}  
 user_agent → ZabbixServer (zabbix.com, 7.0)  
 zabbix.url → http://IP:8080/  
+
+Если тест Discordа будет ругаться, то скрипт который вставляется ниже:
+
+    try {
+        var params = JSON.parse(value);
+
+        var req = new HttpRequest();
+        req.addHeader('Content-Type: application/json');
+
+        var resp = req.post(params.discord_endpoint, JSON.stringify({
+            username: 'Zabbix',
+            content: params.alert_subject + '\n' + params.alert_message
+        }));
+
+        var code = req.getStatus();
+        if (code != 200 && code != 204) {
+            throw 'Discord HTTP Error: ' + code + ' ' + resp;
+        }
+        return 'OK';
+    }
+    catch (e) {
+        throw e;
+    }
 
 Поставить галочку возле Enable
 
