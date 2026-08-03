@@ -65,8 +65,11 @@ Use if severity: Отметьте Warning, Average, High, Disaster.
 Create item
 
 Name: Package updates check
+
 Type: Zabbix agent
+
 Key: custom.packages.check
+
 Type: Text
 
 # 5. Создание триггера
@@ -84,4 +87,5 @@ Result = 1
 
 # 6. Настройка триггера
 Перейдите в Alert → Actions → Trigges Actions
+
 Перейдите во вкладку Report problems to Zabbix administrators и поставьте галочку возле Enabled
