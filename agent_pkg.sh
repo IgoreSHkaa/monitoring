@@ -1,5 +1,5 @@
 #!/bin/sh
-<<<<<<< HEAD
+
 CACHE="/var/lib/zabbix/pkg_cache.txt"
 CUR="/tmp/pkg_curr.txt"
 
@@ -15,7 +15,6 @@ if [ -n "$NEW" ] || [ -n "$DEL" ]; then
     echo "UPDATED: + $NEW - $DEL"
 else
     echo "OK: No updates"
-=======
 
 CACHE_DIR="${CACHE_DIR:-/var/lib/zabbix}"
 CACHE="$CACHE_DIR/pkg_cache.txt"
@@ -68,5 +67,4 @@ if [ -n "$CHANGED" ]; then
 else
     echo "OK: no package changes"
     exit 0
->>>>>>> 1fe800b (fix .yml)
 fi
