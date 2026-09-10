@@ -6,6 +6,7 @@
   vars:
     zabbix_agent_mode: auto
     zabbix_agent_service: zabbix-agent
+    zabbix_server_ip: 16.170.222.143
     zabbix_agent_config: /etc/zabbix/zabbix_agentd.conf
     zabbix_agent_include_dir: /etc/zabbix/zabbix_agentd.d
     package_check_script: /usr/local/bin/agent_pkg.sh
@@ -74,6 +75,19 @@
         owner: zabbix
         group: zabbix
         recurse: true
+      when: zabbix_deploy_mode == 'systemd'
+
+    - name: Configure Zabbix agent server access and unencrypted transport
+      ansible.builtin.replace:
+        path: "{{ zabbix_agent_config }}"
+        regexp: "^{{ item.key }}=.*$"
+        replace: "{{ item.key }}={{ item.value }}"
+      loop:
+        - { key: Server, value: "{{ zabbix_server_ip }},127.0.0.1" }
+        - { key: ServerActive, value: "{{ zabbix_server_ip }}" }
+        - { key: TLSAccept, value: unencrypted }
+        - { key: TLSConnect, value: unencrypted }
+      notify: Apply systemd agent changes
       when: zabbix_deploy_mode == 'systemd'
 
     - name: Ensure systemd agent includes custom configuration
