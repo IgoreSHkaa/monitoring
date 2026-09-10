@@ -2,7 +2,7 @@
 
 CACHE_DIR="${CACHE_DIR:-/var/lib/zabbix}"
 CACHE="$CACHE_DIR/pkg_cache.txt"
-CUR="${CUR:-/tmp/pkg_curr.txt}"
+CUR="${CUR:-$CACHE_DIR/pkg_curr.txt}"
 
 STATUS_FILE="/var/lib/dpkg/status"
 if [ ! -f "$STATUS_FILE" ] && [ -f "/host/var/lib/dpkg/status" ]; then
@@ -18,6 +18,8 @@ if ! mkdir -p "$CACHE_DIR"; then
     echo "ERROR: cannot create cache directory: $CACHE_DIR" >&2
     exit 1
 fi
+
+trap 'rm -f "$CUR"' EXIT
 
 if ! awk '/^Package:/{pkg=$2} /^Version:/{print pkg, $2}' "$STATUS_FILE" | sort > "$CUR"; then
     echo "ERROR: cannot read package status" >&2
