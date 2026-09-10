@@ -1,21 +1,5 @@
 #!/bin/sh
 
-CACHE="/var/lib/zabbix/pkg_cache.txt"
-CUR="/tmp/pkg_curr.txt"
-
-awk '/^Package:/{p=$2} /^Version:/{print p, $2}' /host/var/lib/dpkg/status | sort > "$CUR"
-
-[ -s "$CACHE" ] || { cp "$CUR" "$CACHE"; echo "OK: кэш создан"; exit 0; }
-
-NEW=$(comm -13 "$CACHE" "$CUR" | sed 's/$/; /' | tr -d '\n')
-DEL=$(comm -23 "$CACHE" "$CUR" | sed 's/$/; /' | tr -d '\n')
-
-if [ -n "$NEW" ] || [ -n "$DEL" ]; then
-    cp "$CUR" "$CACHE"
-    echo "UPDATED: + $NEW - $DEL"
-else
-    echo "OK: No updates"
-
 CACHE_DIR="${CACHE_DIR:-/var/lib/zabbix}"
 CACHE="$CACHE_DIR/pkg_cache.txt"
 CUR="${CUR:-/tmp/pkg_curr.txt}"
@@ -30,12 +14,21 @@ if [ ! -f "$STATUS_FILE" ]; then
     exit 1
 fi
 
-mkdir -p "$CACHE_DIR"
+if ! mkdir -p "$CACHE_DIR"; then
+    echo "ERROR: cannot create cache directory: $CACHE_DIR" >&2
+    exit 1
+fi
 
-awk '/^Package:/{pkg=$2} /^Version:/{print pkg, $2}' "$STATUS_FILE" | sort > "$CUR"
+if ! awk '/^Package:/{pkg=$2} /^Version:/{print pkg, $2}' "$STATUS_FILE" | sort > "$CUR"; then
+    echo "ERROR: cannot read package status" >&2
+    exit 1
+fi
 
 if [ ! -s "$CACHE" ]; then
-    cp "$CUR" "$CACHE"
+    if ! cp "$CUR" "$CACHE"; then
+        echo "ERROR: cannot create package cache" >&2
+        exit 1
+    fi
     echo "INIT: cache created"
     exit 0
 fi
@@ -46,25 +39,28 @@ NR==FNR { old[$1]=$2; next }
     new[$1]=$2
 }
 END {
-    for (k in old) {
-        if (!(k in new)) {
-            print "REMOVED " k " " old[k]
+    for (pkg in old) {
+        if (!(pkg in new)) {
+            print "REMOVED " pkg " " old[pkg]
         }
     }
-    for (k in new) {
-        if (!(k in old)) {
-            print "ADDED " k " " new[k]
-        } else if (old[k] != new[k]) {
-            print "UPDATED " k " " old[k] " -> " new[k]
+    for (pkg in new) {
+        if (!(pkg in old)) {
+            print "ADDED " pkg " " new[pkg]
+        } else if (old[pkg] != new[pkg]) {
+            print "UPDATED " pkg " " old[pkg] " -> " new[pkg]
         }
     }
-}' "$CACHE" "$CUR")
+}' "$CACHE" "$CUR" | sort)
 
 if [ -n "$CHANGED" ]; then
-    cp "$CUR" "$CACHE"
+    if ! cp "$CUR" "$CACHE"; then
+        echo "ERROR: cannot update package cache" >&2
+        exit 1
+    fi
     printf '%s\n' "$CHANGED"
-    exit 1
 else
     echo "OK: no package changes"
-    exit 0
 fi
+
+exit 0
