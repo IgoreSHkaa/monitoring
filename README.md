@@ -38,9 +38,8 @@ OK: no package changes
 ```text
 custom.packages.check
 ```
-Процесс установки: 
 
-# 1. Первоначальная настройка Zabbix
+# Первоначальная настройка Zabbix
 Откройте веб-интерфейс: http://IP:8080/  
 
 Перейдите в Administration → General → Macros и установите макрос:  
@@ -130,4 +129,3 @@ Result = 1
 Перейдите в Alert → Actions → Trigges Actions
 
 Перейдите во вкладку Report problems to Zabbix administrators и поставьте галочку возле Enabled
-

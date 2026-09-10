@@ -162,7 +162,7 @@
     - name: Apply systemd agent changes
       ansible.builtin.shell: |
         set -e
-        zabbix_agentd -t -c "{{ zabbix_agent_config }}"
+        zabbix_agentd -T -c "{{ zabbix_agent_config }}"
         systemctl restart "{{ zabbix_agent_service }}"
       args:
         executable: /bin/sh
@@ -172,7 +172,7 @@
       ansible.builtin.shell: |
         set -e
         docker exec "{{ zabbix_selected_container }}" \
-          zabbix_agentd -t -c "{{ zabbix_container_config }}"
+          zabbix_agentd -T -c "{{ zabbix_container_config }}"
         docker restart "{{ zabbix_selected_container }}"
       args:
         executable: /bin/sh
