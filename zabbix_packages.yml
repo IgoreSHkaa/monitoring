@@ -68,6 +68,14 @@
         mode: "0755"
       when: zabbix_deploy_mode == 'systemd'
 
+    - name: Ensure existing package cache files belong to Zabbix
+      ansible.builtin.file:
+        path: "{{ package_cache_dir }}"
+        owner: zabbix
+        group: zabbix
+        recurse: true
+      when: zabbix_deploy_mode == 'systemd'
+
     - name: Ensure systemd agent includes custom configuration
       ansible.builtin.lineinfile:
         path: "{{ zabbix_agent_config }}"
