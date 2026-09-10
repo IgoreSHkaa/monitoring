@@ -78,7 +78,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Validate and restart systemd agent
+      notify: Apply systemd agent changes
       when: zabbix_deploy_mode == 'systemd'
 
     - name: Install package check script for systemd agent
@@ -88,7 +88,7 @@
         owner: root
         group: root
         mode: "0755"
-      notify: Validate and restart systemd agent
+      notify: Apply systemd agent changes
       when: zabbix_deploy_mode == 'systemd'
 
     - name: Install package check UserParameter for systemd agent
@@ -98,7 +98,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify: Validate and restart systemd agent
+      notify: Apply systemd agent changes
       when: zabbix_deploy_mode == 'systemd'
 
     - name: Ensure systemd Zabbix agent is enabled and running
@@ -129,13 +129,13 @@
     - name: Copy package check script into Zabbix container
       ansible.builtin.command:
         cmd: "docker cp /tmp/agent_pkg.sh {{ zabbix_selected_container }}:{{ package_check_script }}"
-      notify: Validate and restart container agent
+      notify: Apply container agent changes
       when: zabbix_deploy_mode == 'container'
 
     - name: Copy UserParameter into Zabbix container
       ansible.builtin.command:
         cmd: "docker cp /tmp/pkg.conf {{ zabbix_selected_container }}:{{ zabbix_container_include_dir }}/pkg.conf"
-      notify: Validate and restart container agent
+      notify: Apply container agent changes
       when: zabbix_deploy_mode == 'container'
 
     - name: Prepare cache directory inside Zabbix container
@@ -152,34 +152,28 @@
           docker exec {{ zabbix_selected_container }} sh -c
           'grep -qF "Include={{ zabbix_container_include_dir }}/*.conf" {{ zabbix_container_config }} ||
           printf "\\nInclude={{ zabbix_container_include_dir }}/*.conf\\n" >> {{ zabbix_container_config }}'
-      notify: Validate and restart container agent
+      notify: Apply container agent changes
       when: zabbix_deploy_mode == 'container'
 
     - name: Apply pending agent changes
       ansible.builtin.meta: flush_handlers
 
   handlers:
-    - name: Validate and restart systemd agent
-      block:
-        - name: Validate Zabbix agent configuration
-          ansible.builtin.command:
-            cmd: "zabbix_agentd -t -c {{ zabbix_agent_config }}"
-          changed_when: false
-
-        - name: Restart Zabbix agent
-          ansible.builtin.service:
-            name: "{{ zabbix_agent_service }}"
-            state: restarted
+    - name: Apply systemd agent changes
+      ansible.builtin.shell: |
+        set -e
+        zabbix_agentd -t -c "{{ zabbix_agent_config }}"
+        systemctl restart "{{ zabbix_agent_service }}"
+      args:
+        executable: /bin/sh
       when: zabbix_deploy_mode == 'systemd'
 
-    - name: Validate and restart container agent
-      block:
-        - name: Validate Zabbix container configuration
-          ansible.builtin.command:
-            cmd: "docker exec {{ zabbix_selected_container }} zabbix_agentd -t -c {{ zabbix_container_config }}"
-          changed_when: false
-
-        - name: Restart Zabbix container
-          ansible.builtin.command:
-            cmd: "docker restart {{ zabbix_selected_container }}"
+    - name: Apply container agent changes
+      ansible.builtin.shell: |
+        set -e
+        docker exec "{{ zabbix_selected_container }}" \
+          zabbix_agentd -t -c "{{ zabbix_container_config }}"
+        docker restart "{{ zabbix_selected_container }}"
+      args:
+        executable: /bin/sh
       when: zabbix_deploy_mode == 'container'
