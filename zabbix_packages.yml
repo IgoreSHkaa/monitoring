@@ -4,206 +4,112 @@
   become: true
 
   vars:
-    zabbix_agent_mode: auto
+    zabbix_server_ip: ""
     zabbix_agent_service: zabbix-agent
     zabbix_agent_config: /etc/zabbix/zabbix_agentd.conf
     zabbix_agent_include_dir: /etc/zabbix/zabbix_agentd.d
     package_check_script: /usr/local/bin/agent_pkg.sh
     package_check_config: "{{ zabbix_agent_include_dir }}/pkg.conf"
     package_cache_dir: /var/lib/zabbix
-    zabbix_container_config: /etc/zabbix/zabbix_agentd.conf
-    zabbix_container_include_dir: /etc/zabbix/zabbix_agentd.d
-    zabbix_container_name: ""
 
-  tasks:
-    - name: Check for a systemd Zabbix agent
-      ansible.builtin.stat:
-        path: "/etc/systemd/system/{{ zabbix_agent_service }}.service"
-      register: zabbix_agent_systemd_unit
-
-    - name: Check for a packaged Zabbix agent unit
-      ansible.builtin.stat:
-        path: "/lib/systemd/system/{{ zabbix_agent_service }}.service"
-      register: zabbix_agent_packaged_unit
-
-    - name: Find a running Zabbix agent container
-      ansible.builtin.shell: "docker ps --format '{{ '{{' }}.Names{{ '}}' }}' | awk '/zabbix-agent/{print; exit}'"
-      register: zabbix_docker_container
-      changed_when: false
-      failed_when: false
-      when: zabbix_agent_mode in ['auto', 'container'] and not zabbix_container_name
-
-    - name: Select agent deployment mode
-      ansible.builtin.set_fact:
-        zabbix_deploy_mode: >-
-          {{ 'systemd' if zabbix_agent_mode == 'systemd' or
-             (zabbix_agent_mode == 'auto' and
-              (zabbix_agent_systemd_unit.stat.exists or zabbix_agent_packaged_unit.stat.exists))
-             else 'container' }}
-        zabbix_selected_container: "{{ zabbix_container_name or (zabbix_docker_container.stdout | default('') | trim) }}"
-
-    - name: Require a detected agent
-      ansible.builtin.assert:
-        that:
-          - zabbix_deploy_mode == 'systemd' or zabbix_selected_container | length > 0
-        fail_msg: >-
-          Zabbix agent was not detected. Set zabbix_agent_mode=systemd or
-          zabbix_container_name=<container> when running the playbook.
-
+  pre_tasks:
     - name: Require the Zabbix Server address
       ansible.builtin.assert:
         that:
-          - zabbix_server_ip is defined
-          - zabbix_server_ip | string | length > 0
+          - zabbix_server_ip | length > 0
         fail_msg: >-
           Set zabbix_server_ip in inventory/group_vars or pass it with
           -e zabbix_server_ip=<server-address>.
 
-    - name: Ensure systemd agent include directory exists
+    - name: Check that the Zabbix agent service exists
+      ansible.builtin.command:
+        cmd: "systemctl cat {{ zabbix_agent_service }}"
+      changed_when: false
+
+  tasks:
+    - name: Ensure Zabbix agent include directory exists
       ansible.builtin.file:
         path: "{{ zabbix_agent_include_dir }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
-      when: zabbix_deploy_mode == 'systemd'
 
-    - name: Ensure systemd package cache directory is writable by Zabbix
+    - name: Ensure package cache belongs to Zabbix
       ansible.builtin.file:
         path: "{{ package_cache_dir }}"
         state: directory
         owner: zabbix
         group: zabbix
         mode: "0755"
-      when: zabbix_deploy_mode == 'systemd'
-
-    - name: Ensure existing package cache files belong to Zabbix
-      ansible.builtin.file:
-        path: "{{ package_cache_dir }}"
-        owner: zabbix
-        group: zabbix
         recurse: true
-      when: zabbix_deploy_mode == 'systemd'
 
-    - name: Configure Zabbix agent server access and unencrypted transport
+    - name: Check for managed agent connection block
+      ansible.builtin.command:
+        cmd: "grep -q '^# BEGIN ANSIBLE PACKAGE CHECK CONNECTION$' {{ zabbix_agent_config }}"
+      register: managed_connection_block
+      changed_when: false
+      failed_when: false
+
+    - name: Remove old agent connection settings once
       ansible.builtin.replace:
         path: "{{ zabbix_agent_config }}"
-        regexp: "^{{ item.key }}=.*$"
-        replace: "{{ item.key }}={{ item.value }}"
-      loop:
-        - { key: Server, value: "{{ zabbix_server_ip }}" }
-        - { key: ServerActive, value: "{{ zabbix_server_ip }}" }
-        - { key: TLSAccept, value: unencrypted }
-        - { key: TLSConnect, value: unencrypted }
-      notify: Apply systemd agent changes
-      when: zabbix_deploy_mode == 'systemd'
+        regexp: "(?m)^[[:space:]]*(Server|ServerActive|TLSAccept|TLSConnect)=.*\\n?"
+        replace: ""
+      notify: Validate and restart Zabbix agent
+      when: managed_connection_block.rc != 0
 
-    - name: Ensure systemd agent includes custom configuration
+    - name: Configure Zabbix agent connection
+      ansible.builtin.blockinfile:
+        path: "{{ zabbix_agent_config }}"
+        marker: "# {mark} ANSIBLE PACKAGE CHECK CONNECTION"
+        block: |
+          Server={{ zabbix_server_ip }}
+          ServerActive={{ zabbix_server_ip }}
+          TLSAccept=unencrypted
+          TLSConnect=unencrypted
+      notify: Validate and restart Zabbix agent
+
+    - name: Ensure Zabbix agent includes custom configuration
       ansible.builtin.lineinfile:
         path: "{{ zabbix_agent_config }}"
-        regexp: '^Include={{ zabbix_agent_include_dir | regex_escape }}.*$'
+        regexp: "^Include={{ zabbix_agent_include_dir | regex_escape }}.*$"
         line: "Include={{ zabbix_agent_include_dir }}/*.conf"
         insertafter: EOF
-        create: true
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Apply systemd agent changes
-      when: zabbix_deploy_mode == 'systemd'
+      notify: Validate and restart Zabbix agent
 
-    - name: Install package check script for systemd agent
+    - name: Install package check script
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/agent_pkg.sh"
         dest: "{{ package_check_script }}"
         owner: root
         group: root
         mode: "0755"
-      notify: Apply systemd agent changes
-      when: zabbix_deploy_mode == 'systemd'
+      notify: Validate and restart Zabbix agent
 
-    - name: Install package check UserParameter for systemd agent
+    - name: Install package check UserParameter
       ansible.builtin.copy:
-        dest: "{{ package_check_config }}"
         src: "{{ playbook_dir }}/zabbix_agent_conf/pkg.conf"
+        dest: "{{ package_check_config }}"
         owner: root
         group: root
         mode: "0644"
-      notify: Apply systemd agent changes
-      when: zabbix_deploy_mode == 'systemd'
+      notify: Validate and restart Zabbix agent
 
-    - name: Ensure systemd Zabbix agent is enabled and running
+    - name: Ensure Zabbix agent is enabled and running
       ansible.builtin.service:
         name: "{{ zabbix_agent_service }}"
         state: started
         enabled: true
-      when: zabbix_deploy_mode == 'systemd'
-
-    - name: Stage package check files for container copy
-      ansible.builtin.copy:
-        src: "{{ item.src }}"
-        dest: "/tmp/{{ item.name }}"
-        mode: "0644"
-      loop:
-        - { src: "{{ playbook_dir }}/agent_pkg.sh", name: agent_pkg.sh }
-        - { src: "{{ playbook_dir }}/zabbix_agent_conf/pkg.conf", name: pkg.conf }
-      when: zabbix_deploy_mode == 'container'
-
-    - name: Ensure package paths exist inside Zabbix container
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ zabbix_selected_container }} sh -c
-          'mkdir -p /usr/local/bin {{ zabbix_container_include_dir }}'
-      changed_when: false
-      when: zabbix_deploy_mode == 'container'
-
-    - name: Copy package check script into Zabbix container
-      ansible.builtin.command:
-        cmd: "docker cp /tmp/agent_pkg.sh {{ zabbix_selected_container }}:{{ package_check_script }}"
-      notify: Apply container agent changes
-      when: zabbix_deploy_mode == 'container'
-
-    - name: Copy UserParameter into Zabbix container
-      ansible.builtin.command:
-        cmd: "docker cp /tmp/pkg.conf {{ zabbix_selected_container }}:{{ zabbix_container_include_dir }}/pkg.conf"
-      notify: Apply container agent changes
-      when: zabbix_deploy_mode == 'container'
-
-    - name: Prepare cache directory inside Zabbix container
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ zabbix_selected_container }} sh -c
-          'mkdir -p {{ package_cache_dir }} && chown zabbix:zabbix {{ package_cache_dir }}'
-      changed_when: false
-      when: zabbix_deploy_mode == 'container'
-
-    - name: Ensure container agent includes custom configuration
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ zabbix_selected_container }} sh -c
-          'grep -qF "Include={{ zabbix_container_include_dir }}/*.conf" {{ zabbix_container_config }} ||
-          printf "\\nInclude={{ zabbix_container_include_dir }}/*.conf\\n" >> {{ zabbix_container_config }}'
-      notify: Apply container agent changes
-      when: zabbix_deploy_mode == 'container'
 
     - name: Apply pending agent changes
       ansible.builtin.meta: flush_handlers
 
   handlers:
-    - name: Apply systemd agent changes
+    - name: Validate and restart Zabbix agent
       ansible.builtin.shell: |
         set -e
         zabbix_agentd -T -c "{{ zabbix_agent_config }}"
         systemctl restart "{{ zabbix_agent_service }}"
       args:
         executable: /bin/sh
-      when: zabbix_deploy_mode == 'systemd'
-
-    - name: Apply container agent changes
-      ansible.builtin.shell: |
-        set -e
-        docker exec "{{ zabbix_selected_container }}" \
-          zabbix_agentd -T -c "{{ zabbix_container_config }}"
-        docker restart "{{ zabbix_selected_container }}"
-      args:
-        executable: /bin/sh
-      when: zabbix_deploy_mode == 'container'
