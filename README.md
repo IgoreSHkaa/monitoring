@@ -1,131 +1,218 @@
-# Что делает скрипт проверки пакетов
+# Проверка пакетов на Zabbix agent
 
-Скриптbagent_pkg.sh собирает текущий список установленных Debian-пакетов из /var/lib/dpkg/status
-Для каждого пакета сохраняется имя и версия, например:
+Скрипт [agent_pkg.sh](agent_pkg.sh) сравнивает текущий список установленных пакетов с сохранённым снимком и возвращает только изменения.
 
-```text
-curl 7.88.1-10ubuntu0.1
-```
+Схема работы:
 
-При первом запуске скрипт создаёт снимок в:
+- считывает список пакетов из `/var/lib/dpkg/status`;
+- сохраняет текущий снимок в `/var/lib/zabbix/pkg_cache.txt`;
+- при следующем запуске сравнивает новый список со старым;
+- возвращает только изменения в виде текста;
+- если изменений нет — возвращает `OK: no package changes`.
 
-```text
-/var/lib/zabbix/pkg_cache.txt
-```
+## Что возвращает скрипт
 
-При последующих запусках текущий список сравнивается со снимком. Скрипт определяет:
+Теперь скрипт возвращает понятные статусы:
 
-- ADDED — пакет установлен;
-- REMOVED — пакет удалён;
-- UPDATED — версия пакета изменилась.
+- `INSTALLED pkg version` — пакет установлен;
+- `REMOVED pkg version` — пакет удалён;
+- `UPGRADED pkg old -> new` — пакет обновлён;
+- `OK: no package changes` — ничего не изменилось.
 
-Примеры результата:
-
-```text
-ADDED git 2.40.1
-UPDATED curl 7.0 -> 7.1
-REMOVED vim 9.0
-```
-
-После сравнения новый список сохраняется в кэш. Если изменений нет, возвращается:
+Примеры:
 
 ```text
+INSTALLED tree 2.3.1-1
+REMOVED curl 7.88.1-10ubuntu0.1
+UPGRADED openssl 3.0.0 -> 3.0.2
 OK: no package changes
 ```
 
-Скрипт не устанавливает и не обновляет пакеты. Он только фиксирует изменения и передаёт результат Zabbix через ключ:
+Ключ Zabbix:
 
 ```text
 custom.packages.check
 ```
 
-# Первоначальная настройка Zabbix
-Откройте веб-интерфейс: http://IP:8080/  
+Это значение отдаёт Zabbix agent через UserParameter.
 
-Перейдите в Administration → General → Macros и установите макрос:  
+---
 
-{$ZABBIX.URL} = http://IP:8080/
+# Как разворачивать на хостах
 
-# 2. Создание типа медиа (Media Type)  
-Перейдите в Alerts → Media types → Create media type:  
+Плейбук [zabbix_packages.yml](zabbix_packages.yml) должен использоваться на уже настроенных Zabbix agent.
 
-Name: Discord  
+Он делает следующее:
 
-Type: Webhook  
+- проверяет наличие `zabbix-agent`;
+- создаёт директорию `/etc/zabbix/zabbix_agentd.d`;
+- создаёт `/var/lib/zabbix` и назначает владельца `zabbix`;
+- добавляет `Include=/etc/zabbix/zabbix_agentd.d/*.conf`, если это нужно;
+- копирует [agent_pkg.sh](agent_pkg.sh) в `/usr/local/bin/agent_pkg.sh`;
+- копирует UserParameter из [zabbix_agent_conf/pkg.conf](zabbix_agent_conf/pkg.conf);
+- валидирует конфиг и перезапускает агент.
 
-Parameters:  
-alert.message → {ALERT.MESSAGE}  
-alert.subject → {ALERT.SUBJECT}  
-discord.endpoint → https://discord.com/api/webhooks/TOKEN  
-event.id → {EVENT.ID}  
-event.nseverity → {EVENT.NSEVERITY}  
-trigger.id → {TRIGGER.ID}  
-user_agent → ZabbixServer (zabbix.com, 7.0)  
-zabbix.url → http://IP:8080/  
+---
 
-Если тест Discordа будет ругаться, то скрипт который вставляется ниже:
+# Как настроить в Zabbix
 
-    try {
-        var params = JSON.parse(value);
+## 1. Создать template
 
-        var req = new HttpRequest();
-        req.addHeader('Content-Type: application/json');
+В веб-интерфейсе Zabbix:
 
-        var resp = req.post(params.discord_endpoint, JSON.stringify({
-            username: 'Zabbix',
-            content: params.alert_subject + '\n' + params.alert_message
-        }));
+- Configuration → Templates → Create template
 
-        var code = req.getStatus();
-        if (code != 200 && code != 204) {
-            throw 'Discord HTTP Error: ' + code + ' ' + resp;
-        }
-        return 'OK';
+Нужно обязательно заполнить:
+
+- Template name: `Linux Package Changes`
+- Visible name: `Linux Package Changes`
+- Template groups: выбрать или создать группу, например `Linux`
+
+После сохранения шаблон будет готов к привязке к хостам.
+
+---
+
+## 2. Создать item внутри template
+
+Открыть шаблон `Linux Package Changes` → Items → Create item
+
+Заполнить:
+
+- Name: `Package updates check`
+- Type: `Zabbix agent`
+- Key: `custom.packages.check`
+- Type of information: `Text`
+- Update interval: `30s` или `60s`
+- History: `Do not store` или `Store up to 31d`
+
+Важно: item должен быть `Text`, потому что значение возвращается строкой.
+
+---
+
+## 3. Создать trigger внутри template
+
+Открыть шаблон → Triggers → Create trigger
+
+Основная идея: один trigger на один тип события или один trigger на любой тип изменения.
+
+
+1. Trigger `Package installed on {HOST.NAME}`
+
+```text
+find(/Linux Package Changes/custom.packages.check,"INSTALLED")=1
+```
+
+2. Trigger `Package removed on {HOST.NAME}`
+
+```text
+find(/Linux Package Changes/custom.packages.check,"REMOVED")=1
+```
+
+3. Trigger `Package upgraded on {HOST.NAME}`
+
+```text
+find(/Linux Package Changes/custom.packages.check,"UPGRADED")=1
+```
+
+## 4. Привязать шаблон к существующим хостам
+
+Для каждого хоста, который должен мониторить пакеты:
+
+- Configuration → Hosts
+- выбрать нужный host
+- открыть его
+- в разделе Templates нажать Add
+- выбрать шаблон `Linux Package Changes`
+
+После этого item и trigger из шаблона появятся у host.
+
+Не нужно создавать отдельный trigger на каждом хосте вручную.
+
+---
+
+## 5. Media type и уведомления в Discord
+
+### Создать Media type
+
+- Alerts → Media types → Create media type
+
+Тип: Webhook
+
+Параметры можно настроить под ваш Discord webhook. Обычно используется JSON с параметрами:
+
+Пример JS-кода для webhook:
+
+```javascript
+try {
+    var params = JSON.parse(value);
+
+    var req = new HttpRequest();
+    req.addHeader('Content-Type: application/json');
+
+    var resp = req.post(params.discord_endpoint, JSON.stringify({
+        username: 'Zabbix',
+        content: params.alert_subject + '\n' + params.alert_message
+    }));
+
+    var code = req.getStatus();
+    if (code != 200 && code != 204) {
+        throw 'Discord HTTP Error: ' + code + ' ' + resp;
     }
-    catch (e) {
-        throw e;
-    }
+    return 'OK';
+}
+catch (e) {
+    throw e;
+}
+```
 
-Поставить галочку возле Enable
+Поставить галочку Enable.
 
-# 3. Настройка пользователя
-Перейдите в Users → Users → Admin → Media:
+### Настроить пользователя
 
-Type: Discord
+- Users → Users → выбрать пользователя
+- Media → добавить Discord webhook
+- Severity: Warning, Average, High, Disaster
 
-Send to: URL вашего Discord Webhook
+---
 
-When active: 1-7,00:00-24:00
+## 6. Action
 
-Use if severity: Отметьте Warning, Average, High, Disaster.
+- Configuration → Actions
+- Create action
+- условия: Trigger value = PROBLEM
+- операции: Send message
+- Media type: Discord
 
-# 4. Создание Item
-Перейдите Monitoring → Hosts → Zabbix server → Items
+После этого Zabbix будет отправлять уведомления на Discord при фактическом появлении события.
 
-Create item
+---
 
-Name: Package updates check
+## 7. Проверка
 
-Type: Zabbix agent
+После деплоя и привязки шаблона к хосту:
 
-Key: custom.packages.check
+- Agent должен возвращать `custom.packages.check`
+- item должен хранить значения в Latest data
+- trigger должен переходить в Problem при `INSTALLED`, `REMOVED` или `UPGRADED`
+- Action должен отправлять уведомление в Discord
 
-Type: Text
+Если изменений нет — агент возвращает:
 
-# 5. Создание триггера
-Перейдите Monitoring → Hosts → Zabbix server → Triggers
+```text
+OK: no package changes
+```
 
-Name: Packages updates detected on {HOST.NAME}
+И trigger не должен срабатывать.
 
-Expressions → Add
+---
 
-Item → Select → Package updates check
-Function: find()
-O: like
-V: UPDATED:
-Result = 1
+# Кратко: что надо сделать в Zabbix
 
-# 6. Настройка триггера
-Перейдите в Alert → Actions → Trigges Actions
+1. создать template `Linux Package Changes`;
+2. создать item `custom.packages.check` типа `Text`;
+3. создать trigger/триггеры на `INSTALLED`, `REMOVED`, `UPGRADED`;
+4. привязать template к хостам;
+5. настроить Discord webhook как Media type;
+6. создать Action на PROBLEM.
 
-Перейдите во вкладку Report problems to Zabbix administrators и поставьте галочку возле Enabled
+Так вы получаете один шаблон, который можно навесить на все нужные Linux-хосты без дублирования trigger на каждом хосте отдельно.
