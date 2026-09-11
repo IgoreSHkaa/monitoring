@@ -1,23 +1,23 @@
 # Проверка пакетов на Zabbix agent
 
-Скрипт [agent_pkg.sh](agent_pkg.sh) сравнивает текущий список установленных пакетов с сохранённым снимком и возвращает только изменения.
+Скрипт agent_pkg.sh сравнивает текущий список установленных пакетов с сохранённым снимком и возвращает только изменения
 
 Схема работы:
 
-- считывает список пакетов из `/var/lib/dpkg/status`;
-- сохраняет текущий снимок в `/var/lib/zabbix/pkg_cache.txt`;
-- при следующем запуске сравнивает новый список со старым;
-- возвращает только изменения в виде текста;
-- если изменений нет — возвращает `OK: no package changes`.
+- считывает список пакетов из `/var/lib/dpkg/status`
+- сохраняет текущий снимок в `/var/lib/zabbix/pkg_cache.txt`
+- при следующем запуске сравнивает новый список со старым
+- возвращает только изменения в виде текста
+- если изменений нет — возвращает `OK: no package changes`
 
 ## Что возвращает скрипт
 
 Теперь скрипт возвращает понятные статусы:
 
-- `INSTALLED pkg version` — пакет установлен;
-- `REMOVED pkg version` — пакет удалён;
-- `UPGRADED pkg old -> new` — пакет обновлён;
-- `OK: no package changes` — ничего не изменилось.
+- `INSTALLED pkg version` — пакет установлен
+- `REMOVED pkg version` — пакет удалён
+- `UPGRADED pkg old -> new` — пакет обновлён
+- `OK: no package changes` — ничего не изменилось
 
 Примеры:
 
@@ -34,23 +34,23 @@ OK: no package changes
 custom.packages.check
 ```
 
-Это значение отдаёт Zabbix agent через UserParameter.
+Это значение отдаёт Zabbix agent через UserParameter
 
 ---
 
 # Как разворачивать на хостах
 
-Плейбук [zabbix_packages.yml](zabbix_packages.yml) должен использоваться на уже настроенных Zabbix agent.
+Плейбук zabbix_packages.yml должен использоваться на уже настроенных Zabbix agent
 
 Он делает следующее:
 
-- проверяет наличие `zabbix-agent`;
-- создаёт директорию `/etc/zabbix/zabbix_agentd.d`;
-- создаёт `/var/lib/zabbix` и назначает владельца `zabbix`;
-- добавляет `Include=/etc/zabbix/zabbix_agentd.d/*.conf`, если это нужно;
-- копирует [agent_pkg.sh](agent_pkg.sh) в `/usr/local/bin/agent_pkg.sh`;
-- копирует UserParameter из [zabbix_agent_conf/pkg.conf](zabbix_agent_conf/pkg.conf);
-- валидирует конфиг и перезапускает агент.
+- проверяет наличие `zabbix-agent`
+- создаёт директорию `/etc/zabbix/zabbix_agentd.d`
+- создаёт `/var/lib/zabbix` и назначает владельца `zabbix`
+- добавляет `Include=/etc/zabbix/zabbix_agentd.d/*.conf`
+- копирует agent_pkg.sh] в `/usr/local/bin/agent_pkg.sh`
+- копирует UserParameter из zabbix_agent_conf/pkg.conf
+- валидирует конфиг и перезапускает агент
 
 ---
 
@@ -68,7 +68,7 @@ custom.packages.check
 - Visible name: `Linux Package Changes`
 - Template groups: выбрать или создать группу, например `Linux`
 
-После сохранения шаблон будет готов к привязке к хостам.
+После сохранения шаблон будет готов к привязке к хостам
 
 ---
 
@@ -85,7 +85,7 @@ custom.packages.check
 - Update interval: `30s` или `60s`
 - History: `Do not store` или `Store up to 31d`
 
-Важно: item должен быть `Text`, потому что значение возвращается строкой.
+Важно: item должен быть `Text`, потому что значение возвращается строкой
 
 ---
 
@@ -93,7 +93,7 @@ custom.packages.check
 
 Открыть шаблон → Triggers → Create trigger
 
-Основная идея: один trigger на один тип события или один trigger на любой тип изменения.
+Основная идея: один trigger на один тип события или один trigger на любой тип изменения
 
 
 1. Trigger `Package installed on {HOST.NAME}`
@@ -165,7 +165,7 @@ catch (e) {
 }
 ```
 
-Поставить галочку Enable.
+Поставить галочку Enable
 
 ### Настроить пользователя
 
@@ -202,17 +202,17 @@ catch (e) {
 OK: no package changes
 ```
 
-И trigger не должен срабатывать.
+И trigger не должен срабатывать
 
 ---
 
 # Кратко: что надо сделать в Zabbix
 
-1. создать template `Linux Package Changes`;
-2. создать item `custom.packages.check` типа `Text`;
-3. создать trigger/триггеры на `INSTALLED`, `REMOVED`, `UPGRADED`;
-4. привязать template к хостам;
-5. настроить Discord webhook как Media type;
-6. создать Action на PROBLEM.
+1. создать template `Linux Package Changes`
+2. создать item `custom.packages.check` типа `Text`
+3. создать trigger/триггеры на `INSTALLED`, `REMOVED`, `UPGRADED`
+4. привязать template к хостам
+5. настроить Discord webhook как Media type
+6. создать Action на PROBLEM
 
-Так вы получаете один шаблон, который можно навесить на все нужные Linux-хосты без дублирования trigger на каждом хосте отдельно.
+Так вы получаете один шаблон, который можно навесить на все нужные Linux-хосты без дублирования trigger на каждом хосте отдельно
