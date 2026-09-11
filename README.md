@@ -12,29 +12,12 @@
 
 ## Что возвращает скрипт
 
-Теперь скрипт возвращает понятные статусы:
+Теперь скрипт возвращает статусы:
 
 - `INSTALLED pkg version` — пакет установлен
 - `REMOVED pkg version` — пакет удалён
 - `UPGRADED pkg old -> new` — пакет обновлён
 - `OK: no package changes` — ничего не изменилось
-
-Примеры:
-
-```text
-INSTALLED tree 2.3.1-1
-REMOVED curl 7.88.1-10ubuntu0.1
-UPGRADED openssl 3.0.0 -> 3.0.2
-OK: no package changes
-```
-
-Ключ Zabbix:
-
-```text
-custom.packages.check
-```
-
-Это значение отдаёт Zabbix agent через UserParameter
 
 ---
 
@@ -48,7 +31,7 @@ custom.packages.check
 - создаёт директорию `/etc/zabbix/zabbix_agentd.d`
 - создаёт `/var/lib/zabbix` и назначает владельца `zabbix`
 - добавляет `Include=/etc/zabbix/zabbix_agentd.d/*.conf`
-- копирует agent_pkg.sh] в `/usr/local/bin/agent_pkg.sh`
+- копирует agent_pkg.sh в `/usr/local/bin/agent_pkg.sh`
 - копирует UserParameter из zabbix_agent_conf/pkg.conf
 - валидирует конфиг и перезапускает агент
 
@@ -65,10 +48,7 @@ custom.packages.check
 Нужно обязательно заполнить:
 
 - Template name: `Linux Package Changes`
-- Visible name: `Linux Package Changes`
 - Template groups: выбрать или создать группу, например `Linux`
-
-После сохранения шаблон будет готов к привязке к хостам
 
 ---
 
@@ -82,19 +62,14 @@ custom.packages.check
 - Type: `Zabbix agent`
 - Key: `custom.packages.check`
 - Type of information: `Text`
-- Update interval: `30s` или `60s`
-- History: `Do not store` или `Store up to 31d`
-
-Важно: item должен быть `Text`, потому что значение возвращается строкой
+- Update interval: `10s`
+- History: `Store up to 31d`
 
 ---
 
 ## 3. Создать trigger внутри template
 
 Открыть шаблон → Triggers → Create trigger
-
-Основная идея: один trigger на один тип события или один trigger на любой тип изменения
-
 
 1. Trigger `Package installed on {HOST.NAME}`
 
@@ -123,10 +98,6 @@ find(/Linux Package Changes/custom.packages.check,"UPGRADED")=1
 - открыть его
 - в разделе Templates нажать Add
 - выбрать шаблон `Linux Package Changes`
-
-После этого item и trigger из шаблона появятся у host.
-
-Не нужно создавать отдельный trigger на каждом хосте вручную.
 
 ---
 
@@ -182,35 +153,3 @@ catch (e) {
 - условия: Trigger value = PROBLEM
 - операции: Send message
 - Media type: Discord
-
-После этого Zabbix будет отправлять уведомления на Discord при фактическом появлении события.
-
----
-
-## 7. Проверка
-
-После деплоя и привязки шаблона к хосту:
-
-- Agent должен возвращать `custom.packages.check`
-- item должен хранить значения в Latest data
-- trigger должен переходить в Problem при `INSTALLED`, `REMOVED` или `UPGRADED`
-- Action должен отправлять уведомление в Discord
-
-Если изменений нет — агент возвращает:
-
-```text
-OK: no package changes
-```
-
-И trigger не должен срабатывать
-
----
-
-# Кратко: что надо сделать в Zabbix
-
-1. создать template `Linux Package Changes`
-2. создать item `custom.packages.check` типа `Text`
-3. создать trigger/триггеры на `INSTALLED`, `REMOVED`, `UPGRADED`
-4. привязать template к хостам
-5. настроить Discord webhook как Media type
-6. создать Action на PROBLEM
