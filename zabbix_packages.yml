@@ -4,7 +4,6 @@
   become: true
 
   vars:
-    zabbix_server_ip: ""
     zabbix_agent_service: zabbix-agent
     zabbix_agent_config: /etc/zabbix/zabbix_agentd.conf
     zabbix_agent_include_dir: /etc/zabbix/zabbix_agentd.d
@@ -13,14 +12,6 @@
     package_cache_dir: /var/lib/zabbix
 
   pre_tasks:
-    - name: Require the Zabbix Server address
-      ansible.builtin.assert:
-        that:
-          - zabbix_server_ip | length > 0
-        fail_msg: >-
-          Set zabbix_server_ip in inventory/group_vars or pass it with
-          -e zabbix_server_ip=<server-address>.
-
     - name: Check that the Zabbix agent service exists
       ansible.builtin.command:
         cmd: "systemctl cat {{ zabbix_agent_service }}"
@@ -43,32 +34,6 @@
         group: zabbix
         mode: "0755"
         recurse: true
-
-    - name: Check for managed agent connection block
-      ansible.builtin.command:
-        cmd: "grep -q '^# BEGIN ANSIBLE PACKAGE CHECK CONNECTION$' {{ zabbix_agent_config }}"
-      register: managed_connection_block
-      changed_when: false
-      failed_when: false
-
-    - name: Remove old agent connection settings once
-      ansible.builtin.replace:
-        path: "{{ zabbix_agent_config }}"
-        regexp: "(?m)^[[:space:]]*(Server|ServerActive|TLSAccept|TLSConnect)=.*\\n?"
-        replace: ""
-      notify: Validate and restart Zabbix agent
-      when: managed_connection_block.rc != 0
-
-    - name: Configure Zabbix agent connection
-      ansible.builtin.blockinfile:
-        path: "{{ zabbix_agent_config }}"
-        marker: "# {mark} ANSIBLE PACKAGE CHECK CONNECTION"
-        block: |
-          Server={{ zabbix_server_ip }}
-          ServerActive={{ zabbix_server_ip }}
-          TLSAccept=unencrypted
-          TLSConnect=unencrypted
-      notify: Validate and restart Zabbix agent
 
     - name: Ensure Zabbix agent includes custom configuration
       ansible.builtin.lineinfile:
