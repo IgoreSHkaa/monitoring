@@ -48,9 +48,9 @@ END {
     }
     for (pkg in new) {
         if (!(pkg in old)) {
-            print "ADDED " pkg " " new[pkg]
+            print "INSTALLED " pkg " " new[pkg]
         } else if (old[pkg] != new[pkg]) {
-            print "UPDATED " pkg " " old[pkg] " -> " new[pkg]
+            print "UPGRADED " pkg " " old[pkg] " -> " new[pkg]
         }
     }
 }' "$CACHE" "$CUR" | sort)
