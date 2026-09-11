@@ -214,5 +214,3 @@ OK: no package changes
 4. привязать template к хостам
 5. настроить Discord webhook как Media type
 6. создать Action на PROBLEM
-
-Так вы получаете один шаблон, который можно навесить на все нужные Linux-хосты без дублирования trigger на каждом хосте отдельно
